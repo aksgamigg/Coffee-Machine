@@ -403,11 +403,6 @@ class GiveDrinkPage(ttk.Frame):
 
         self.canvas = ttk.Canvas(self)
         self.canvas.pack(fill="both", expand=True)
-
-        # You might want specific images for specific drinks later,
-        # but for now, let's use a generic delivery image (or one of your windows)
-        # Assuming you have a 'CappuccinoWindow.png' or similar you want to show final result on.
-        # For now, I'll reuse StartScreen just to test, but you should swap this!
         screen_path = os.path.join(project_root, "assets", f"{self.master.drink}Window.png")
         pil_image = Image.open(screen_path)
         pil_image = pil_image.resize((540, 960), Image.Resampling.LANCZOS)
@@ -457,4 +452,5 @@ class GiveDrinkPage(ttk.Frame):
 
         self.canvas.tag_bind(self.web_link, "<Button-1>", open_link)
         self.canvas.tag_bind(self.web_link, "<Enter>", lambda e: self.canvas.config(cursor="hand2"))
+
         self.canvas.tag_bind(self.web_link, "<Leave>", lambda e: self.canvas.config(cursor=""))
