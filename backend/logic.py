@@ -1,9 +1,16 @@
+from gtts import gTTS
+import pygame
+import tempfile
+import os
+import threading
+
 class CoffeeMachine:
     def __init__(self):
         self.resources = {
             "water": 300,
             "milk": 200,
             "coffee": 100,
+            "money": 20.0
         }
         self.MENU = {
             "espresso": {
@@ -36,6 +43,7 @@ class CoffeeMachine:
             "water": 300,
             "milk": 200,
             "coffee": 100,
+            "money": 20.0
         }
 
 machine = CoffeeMachine()
@@ -62,6 +70,16 @@ def verify_resources(drink_name):
 
 
 def process_payment(total_cost, no_pennies, no_nickels, no_dimes, no_quarters, no_dollars):
+    # Process coins and bills
+    try:
+        no_pennies = int(no_pennies or 0)
+        no_nickels = int(no_nickels or 0)
+        no_dimes = int(no_dimes or 0)
+        no_quarters = int(no_quarters or 0)
+        no_dollars = int(no_dollars or 0)
+    except ValueError:
+        # Safety net if they type text instead of numbers
+        no_pennies = no_nickels = no_dimes = no_quarters = no_dollars = 0
     # Calculate value by multiplying count by coin value
     val_pennies = no_pennies * 0.01
     val_nickels = no_nickels * 0.05
@@ -74,8 +92,36 @@ def process_payment(total_cost, no_pennies, no_nickels, no_dimes, no_quarters, n
     payment = round(payment, 2)
 
     # Check payment
-    if payment >= total_cost:
+    if payment > machine.resources["money"]:
+        return False, None, None
+    elif payment >= total_cost:
         change = round(payment - total_cost, 2)
-        return True, change
+        machine.resources["money"] += payment
+        machine.resources["money"] -= change
+        return True, change, payment
     else:
-        return False, None
+        return False, None, payment
+
+def _speak_worker(text):
+    tts = gTTS(text=text, lang="en")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+        filename = f.name
+        tts.save(filename)
+
+    pygame.mixer.init()
+    pygame.mixer.music.load(filename)
+    pygame.mixer.music.play()
+
+    while pygame.mixer.music.get_busy():
+        pygame.time.wait(50)
+
+    pygame.mixer.quit()
+    os.remove(filename)
+
+def speak(text):
+    threading.Thread(
+        target=_speak_worker,
+        args=(text,),
+        daemon=True
+    ).start()
