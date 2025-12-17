@@ -1,2 +1,4 @@
 ttkbootstrap
 pillow
+pygame-ce
+gtts
