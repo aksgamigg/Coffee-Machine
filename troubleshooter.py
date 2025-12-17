@@ -1,220 +1,164 @@
 import tkinter as tk
-from tkinter import ttk
-import sys
+from tkinter import ttk, messagebox, scrolledtext
 import os
+import sys
 import importlib.util
 import subprocess
 import threading
 
-# --- CONFIGURATION ---
-REQUIRED_LIBS = ["ttkbootstrap", "PIL"]  # PIL is the import name for Pillow
 
-# MAP: Define where each file SHOULD be relative to the project root
-# Format: "path/to/folder": ["file1.py", "file2.py"]
-FILE_STRUCTURE = {
-    ".": ["main.py"],  # Root folder
-    "gui": ["gui_code.py"],  # gui folder
-    "backend": ["logic.py"]  # backend folder
-}
+class CoffeeTroubleshooter:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Coffee Machine Troubleshooter")
+        self.root.geometry("600x500")
+        self.root.configure(bg="#2b2b2b")
 
-REQUIRED_ASSETS = [
-    "logo.ico",
-    "StartScreen.png",
-    "OrderWindow.png",
-    "PaymentWindow.png",
-    "ChangeWindow.png",
-    "EspressoWindow.png",
-    "LatteWindow.png",
-    "CappuccinoWindow.png"
-]
+        # --- CONFIGURATION ---
+        self.project_root = os.path.dirname(os.path.abspath(__file__))
 
+        # Define what SHOULD be there based on your screenshots
+        self.expected_structure = {
+            "assets": [
+                "logo.ico", "logo.png", "StartScreen.png", "OrderWindow.png",
+                "EspressoWindow.png", "LatteWindow.png", "CappuccinoWindow.png",
+                "PaymentWindow.png", "ChangeWindow.png"
+                # Note: Add others if missing from this list
+            ],
+            "backend": ["__init__.py", "logic.py"],
+            "gui": [
+                "__init__.py", "gui_code.py", "employee_verification.py",
+                "passcode_editor.py"
+            ],
+            ".": ["main.py", "requirements.txt", "employee_passcode.txt", "dependency_installer.py"]  # Root files
+        }
 
-class CoffeeTroubleshooter(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Coffee Machine Diagnostics")
-        self.geometry("650x600")  # Made slightly wider for path names
-        self.configure(bg="#1e1e1e")
+        self.required_modules = ["ttkbootstrap", "PIL", "pygame", "gtts"]
 
-        # Style Configuration
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.style.configure("TLabel", background="#1e1e1e", foreground="#cfcfcf", font=("Consolas", 10))
-        self.style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#e0a800")
-        self.style.configure("Status.TLabel", font=("Segoe UI", 12))
+        # --- UI LAYOUT ---
 
-        self.missing_libs = []
-        self.missing_files = []
-
-        self.create_widgets()
-        self.run_diagnostics()
-
-    def create_widgets(self):
         # Header
-        header = ttk.Label(self, text="SYSTEM DIAGNOSTICS", style="Header.TLabel")
-        header.pack(pady=20)
+        lbl_title = tk.Label(root, text="System Diagnostic Tool", font=("Segoe UI", 14, "bold"), bg="#2b2b2b",
+                             fg="#e69138")
+        lbl_title.pack(pady=10)
 
-        # Status Frame
-        self.status_frame = tk.Frame(self, bg="#1e1e1e")
-        self.status_frame.pack(fill="x", padx=40)
+        # Button Frame
+        btn_frame = tk.Frame(root, bg="#2b2b2b")
+        btn_frame.pack(pady=5)
 
-        # Categories
-        self.lbl_lib_status = self.create_status_row("Libraries")
-        self.lbl_struct_status = self.create_status_row("Folder Structure")
-        self.lbl_asset_status = self.create_status_row("Assets")
+        self.btn_scan = tk.Button(btn_frame, text="1. Scan Files & Libs", bg="#2196F3", fg="white", width=20,
+                                  command=self.run_full_scan)
+        self.btn_scan.pack(side=tk.LEFT, padx=10)
+
+        self.btn_test = tk.Button(btn_frame, text="2. Test Run (Catch Errors)", bg="#e91e63", fg="white", width=25,
+                                  command=self.test_launch_app)
+        self.btn_test.pack(side=tk.LEFT, padx=10)
 
         # Log Area
-        tk.Label(self, text="Diagnostic Log:", bg="#1e1e1e", fg="#888", anchor="w").pack(fill="x", padx=40,
-                                                                                         pady=(20, 0))
-        self.log_area = tk.Text(self, height=12, bg="#2b2b2b", fg="#00ff00", font=("Consolas", 9), bd=0, padx=10,
-                                pady=10)
-        self.log_area.pack(fill="both", expand=True, padx=40, pady=5)
-        self.log_area.config(state=tk.DISABLED)
+        self.log_area = scrolledtext.ScrolledText(root, width=70, height=20, bg="#1e1e1e", fg="#00ff00",
+                                                  font=("Consolas", 9))
+        self.log_area.pack(pady=10, padx=10)
+        self.log_area.insert(tk.END, "Waiting to scan...\n")
+        self.log_area.config(state='disabled')
 
-        # Action Button Area
-        self.btn_action = tk.Button(
-            self,
-            text="SCANNING...",
-            bg="#444",
-            fg="white",
-            font=("Segoe UI", 10, "bold"),
-            state=tk.DISABLED,
-            command=self.handle_action
-        )
-        self.btn_action.pack(pady=20, ipadx=20, ipady=5)
+    def log(self, message, color="#00ff00"):
+        self.log_area.config(state='normal')
 
-    def create_status_row(self, text):
-        frame = tk.Frame(self.status_frame, bg="#1e1e1e")
-        frame.pack(fill="x", pady=5)
+        # Configure tag for color if not exists
+        if color not in self.log_area.tag_names():
+            self.log_area.tag_config(color, foreground=color)
 
-        lbl_name = tk.Label(frame, text=f"{text}:", width=25, anchor="w", bg="#1e1e1e", fg="#cfcfcf",
-                            font=("Segoe UI", 10))
-        lbl_name.pack(side="left")
-
-        lbl_status = tk.Label(frame, text="WAITING", width=15, anchor="w", bg="#1e1e1e", fg="#888",
-                              font=("Segoe UI", 10, "bold"))
-        lbl_status.pack(side="left")
-
-        return lbl_status
-
-    def log(self, msg, color="#00ff00"):
-        self.log_area.config(state=tk.NORMAL)
-        self.log_area.tag_config(color, foreground=color)
-        self.log_area.insert(tk.END, f"> {msg}\n", color)
+        self.log_area.insert(tk.END, message + "\n", color)
         self.log_area.see(tk.END)
-        self.log_area.config(state=tk.DISABLED)
+        self.log_area.config(state='disabled')
 
-    def set_status(self, label, status, color):
-        label.config(text=status, fg=color)
+    def run_full_scan(self):
+        self.log_area.config(state='normal')
+        self.log_area.delete(1.0, tk.END)
+        self.log_area.config(state='disabled')
 
-    def run_diagnostics(self):
-        self.log("Starting full system scan...", "white")
-        threading.Thread(target=self._scan_process, daemon=True).start()
+        self.log("--- STARTING SYSTEM SCAN ---", "#ffffff")
 
-    def _scan_process(self):
-        # 1. Check Libraries
-        self.missing_libs = []
-        for lib in REQUIRED_LIBS:
-            if importlib.util.find_spec(lib) is None:
-                if lib == "PIL":
-                    if importlib.util.find_spec("Pillow") is None:
-                        self.missing_libs.append("Pillow")
-                else:
-                    self.missing_libs.append(lib)
-
-        if self.missing_libs:
-            self.set_status(self.lbl_lib_status, "MISSING", "#ff4444")
-            self.log(f"CRITICAL: Missing libraries: {', '.join(self.missing_libs)}", "#ff4444")
-        else:
-            self.set_status(self.lbl_lib_status, "OK", "#00ff00")
-            self.log("Libraries checked. OK.")
-
-        # 2. Check File Structure
-        self.missing_files = []
-        structure_errors = False
-
-        for folder, files in FILE_STRUCTURE.items():
-            # Check if folder exists (skip check for root '.')
-            folder_path = folder if folder != "." else ""
-            if folder != "." and not os.path.exists(folder_path):
-                self.log(f"MISSING FOLDER: '{folder}/'", "#ff4444")
-                structure_errors = True
-                continue
-
-            # Check files inside that folder
+        # 1. Check Files
+        missing_files = []
+        for folder, files in self.expected_structure.items():
             for file in files:
-                target_path = os.path.join(folder_path, file)
-                if not os.path.exists(target_path):
-                    self.missing_files.append(target_path)
-                    self.log(f"MISSING FILE: {target_path}", "#ff4444")
+                if folder == ".":
+                    path = os.path.join(self.project_root, file)
+                else:
+                    path = os.path.join(self.project_root, folder, file)
 
-        if self.missing_files or structure_errors:
-            self.set_status(self.lbl_struct_status, "BROKEN", "#ff4444")
-            self.log("Action: Please create folders 'gui' and 'backend' and move files.", "yellow")
+                if os.path.exists(path):
+                    self.log(f"[OK] Found {folder}/{file}")
+                else:
+                    self.log(f"[MISSING] {folder}/{file}", "#ff0000")
+                    missing_files.append(f"{folder}/{file}")
+
+        # 2. Check Python Modules
+        missing_libs = []
+        for lib in self.required_modules:
+            # Handle naming differences (PIL is imported as PIL, but installed as pillow)
+            import_name = "PIL" if lib == "PIL" else lib
+            spec = importlib.util.find_spec(import_name)
+            if spec is not None:
+                self.log(f"[OK] Library '{lib}' installed.")
+            else:
+                self.log(f"[MISSING] Library '{lib}' NOT found!", "#ff0000")
+                missing_libs.append(lib)
+
+        self.log("-" * 30, "#ffffff")
+
+        if not missing_files and not missing_libs:
+            self.log("Scan Complete: SYSTEM HEALTHY ✅", "#00ff00")
         else:
-            self.set_status(self.lbl_struct_status, "OK", "#00ff00")
-            self.log("File structure checked. OK.")
+            self.log("Scan Complete: ISSUES FOUND ❌", "#ff0000")
+            if missing_libs:
+                self.log("TIP: Run 'dependency_installer.py' to fix libraries.", "#e69138")
+            if missing_files:
+                self.log("TIP: Check if files were moved or deleted.", "#e69138")
 
-        # 3. Check Assets
-        missing_assets = []
-        asset_dir = "assets"
+    def test_launch_app(self):
+        self.log("\n--- ATTEMPTING TEST LAUNCH ---", "#ffffff")
+        self.log("Running main.py and capturing output...", "#ffffff")
 
-        if not os.path.isdir(asset_dir):
-            self.log("CRITICAL: 'assets' folder not found!", "#ff4444")
-            missing_assets = REQUIRED_ASSETS
-        else:
-            for asset in REQUIRED_ASSETS:
-                target = os.path.join(asset_dir, asset)
-                if not os.path.exists(target):
-                    missing_assets.append(asset)
+        target = os.path.join(self.project_root, "main.py")
+        if not os.path.exists(target):
+            self.log("Cannot test: main.py is missing!", "#ff0000")
+            return
 
-        if missing_assets:
-            self.set_status(self.lbl_asset_status, "INCOMPLETE", "#ff4444")
-            self.log(f"Missing assets: {len(missing_assets)} file(s)", "#ff4444")
-        else:
-            self.set_status(self.lbl_asset_status, "OK", "#00ff00")
-            self.log("Assets checked. OK.")
+        # Run in a thread so GUI doesn't freeze
+        threading.Thread(target=self._run_subprocess, args=(target,), daemon=True).start()
 
-        # Final Decision
-        is_structure_ok = not self.missing_files and not structure_errors and not missing_assets
+    def _run_subprocess(self, target):
+        try:
+            # We run python as a subprocess and pipe the output
+            process = subprocess.Popen(
+                [sys.executable, target],
+                cwd=self.project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
 
-        if self.missing_libs:
-            self.btn_action.config(text="FIX DEPENDENCIES", bg="#e0a800", state=tk.NORMAL)
-        elif not is_structure_ok:
-            self.btn_action.config(text="STRUCTURE ERROR", bg="#ff4444", state=tk.DISABLED)
-            self.log("Cannot fix structure automatically. Move files manually.", "white")
-        else:
-            self.btn_action.config(text="LAUNCH APP", bg="#00aa00", state=tk.NORMAL)
-            self.log("System healthy. Ready to launch.", "#00ff00")
+            stdout, stderr = process.communicate()
 
-    def handle_action(self):
-        text = self.btn_action.cget("text")
-        if text == "FIX DEPENDENCIES":
-            self.fix_dependencies()
-        elif text == "LAUNCH APP":
-            self.launch_app()
+            if stdout:
+                self.log(f"STDOUT: {stdout}", "#cccccc")
 
-    def fix_dependencies(self):
-        self.btn_action.config(state=tk.DISABLED)
-        self.log("Installing libraries...", "yellow")
+            if stderr:
+                self.log("CRASH DETECTED (STDERR):", "#ff0000")
+                self.log(stderr, "#ff4444")
+                self.log("Analyze the error above to fix the crash.", "#e69138")
+            elif process.returncode == 0:
+                self.log("App closed successfully (No crash detected).", "#00ff00")
+            else:
+                self.log(f"App exited with code {process.returncode} but no error message?", "#ff0000")
 
-        def run_pip():
-            try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", *self.missing_libs])
-                self.log("Success! Re-scanning...", "#00ff00")
-                self.after(1000, self.run_diagnostics)
-            except subprocess.CalledProcessError as e:
-                self.log(f"Error: {e}", "#ff4444")
-                self.btn_action.config(state=tk.NORMAL)
-
-        threading.Thread(target=run_pip, daemon=True).start()
-
-    def launch_app(self):
-        self.log("Launching main.py...", "#00ff00")
-        self.destroy()
-        subprocess.Popen([sys.executable, "main.py"])
+        except Exception as e:
+            self.log(f"Failed to launch subprocess: {e}", "#ff0000")
 
 
 if __name__ == "__main__":
-    app = CoffeeTroubleshooter()
-    app.mainloop()
+    root = tk.Tk()
+    app = CoffeeTroubleshooter(root)
+    root.mainloop()
