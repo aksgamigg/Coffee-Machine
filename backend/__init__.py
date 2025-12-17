@@ -1,1 +1,1 @@
-from .logic import verify_resources, machine, process_payment, speak
+from .logic import verify_resources, machine, process_payment
