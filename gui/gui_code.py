@@ -104,8 +104,8 @@ class Screen(ttk.Frame):
 
         self.canvas.create_image(0, 0, image=self.photo, anchor="nw")
 
-        self.bind("<e>", lambda e: self.master.manage_employee_mode())
-        self.bind("<r>", lambda e: self.master.refill_machine())
+        self.bind("<e>", self.master.manage_employee_mode)
+        self.bind("<r>", self.master.refill_machine)
 
         self.mail = self.canvas.create_text(
             187, 840,
@@ -176,6 +176,8 @@ class StartPage(Screen):
     def custom_employee_manage(self):
         if self.master.employee_mode:
             self.master.employee_mode=False
+            if self.btn_passcode_change.winfo_exists():
+                self.btn_passcode_change.destroy()
             speak("Employee mode disabled.")
         else:
             EmployeeCodeDialog(self.master, callback=self.passcode_editor)
