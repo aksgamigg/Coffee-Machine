@@ -1,99 +1,199 @@
-import tkinter as tk
-from tkinter import ttk
 import sys
 import subprocess
+import os
 import threading
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-class DependencyInstaller(tk.Tk):
-    def __init__(self):
-        super().__init__()
 
-        self.title("Coffee Machine Setup")
-        self.geometry("400x350")
-        self.resizable(False, False)
+class DependencyInstaller:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Coffee Machine Setup")
+        self.root.geometry("500x400")
+        self.root.resizable(False, False)
 
-        # REQUIREMENTS LIST
-        self.requirements = ["ttkbootstrap", "Pillow"]
+        # Center the window
+        self.center_window()
 
-        # Styling to match your Darkly theme (manually, since we don't have bootstrap yet)
-        self.configure(bg="#2b2b2b")
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
+        # Style (Basic Tkinter since we don't have bootstrap yet)
+        self.bg_color = "#2b2b2b"
+        self.fg_color = "#ffffff"
+        self.accent_color = "#e69138"  # A coffee-like orange
 
-        # Dark theme colors for standard widgets
-        self.style.configure("TLabel", background="#2b2b2b", foreground="white", font=("Segoe UI", 10))
-        self.style.configure("TButton", font=("Segoe UI", 10, "bold"), background="#e0a800", foreground="black")
-        self.style.map("TButton", background=[("active", "#c69500")])
-        self.style.configure("TProgressbar", troughcolor="#444444", background="#e0a800")
+        self.root.configure(bg=self.bg_color)
 
-        # UI Elements
-        self.create_widgets()
+        # --- UI ELEMENTS ---
 
-    def create_widgets(self):
         # Header
-        header = tk.Label(self, text="Project Setup", font=("Segoe UI", 16, "bold"), bg="#2b2b2b", fg="#e0a800")
-        header.pack(pady=20)
-
-        # Status Label
-        self.status_label = ttk.Label(self, text="Ready to install dependencies.")
-        self.status_label.pack(pady=5)
+        header_font = ("Segoe UI", 16, "bold")
+        self.lbl_title = tk.Label(
+            root,
+            text="Initial System Setup",
+            bg=self.bg_color,
+            fg=self.fg_color,
+            font=header_font
+        )
+        self.lbl_title.pack(pady=20)
 
         # Progress Bar
-        self.progress = ttk.Progressbar(self, orient="horizontal", length=300, mode="determinate")
+        self.progress = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
         self.progress.pack(pady=10)
 
-        # Log Area (Text widget)
-        self.log_area = tk.Text(self, height=8, width=45, bg="#1e1e1e", fg="#00ff00", font=("Consolas", 9), bd=0)
-        self.log_area.pack(pady=10)
-        self.log_area.insert(tk.END, "Waiting to start...\n")
-        self.log_area.config(state=tk.DISABLED)
+        # Status Label
+        self.lbl_status = tk.Label(
+            root,
+            text="Ready to install...",
+            bg=self.bg_color,
+            fg="#cccccc",
+            font=("Segoe UI", 10)
+        )
+        self.lbl_status.pack(pady=5)
 
-        # Install Button
-        self.btn_install = ttk.Button(self, text="INSTALL DEPENDENCIES", command=self.start_installation)
-        self.btn_install.pack(pady=10)
+        # Log Window (Scrolled Text)
+        self.log_text = tk.Text(
+            root,
+            height=10,
+            width=55,
+            bg="#1e1e1e",
+            fg="#00ff00",  # Hacker style terminal green
+            font=("Consolas", 9),
+            state="disabled"
+        )
+        self.log_text.pack(pady=10, padx=20)
+
+        # Action Button
+        self.btn_action = tk.Button(
+            root,
+            text="Install Dependencies",
+            bg=self.accent_color,
+            fg="black",
+            font=("Segoe UI", 10, "bold"),
+            command=self.start_installation,
+            width=20,
+            relief="flat"
+        )
+        self.btn_action.pack(pady=15)
+
+    def center_window(self):
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
 
     def log(self, message):
-        """Updates the text area safely"""
-        self.log_area.config(state=tk.NORMAL)
-        self.log_area.insert(tk.END, f"> {message}\n")
-        self.log_area.see(tk.END)
-        self.log_area.config(state=tk.DISABLED)
+        self.log_text.config(state="normal")
+        self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)
+        self.log_text.config(state="disabled")
+
+    def find_requirements_file(self):
+        # Check current directory
+        if os.path.exists("requirements.txt"):
+            return "requirements.txt"
+
+        # Check one directory up (common in this project structure)
+        parent_req = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "requirements.txt")
+        if os.path.exists(parent_req):
+            return parent_req
+
+        return None
 
     def start_installation(self):
-        self.btn_install.config(state=tk.DISABLED)
-        self.progress['value'] = 0
-        # Run in a separate thread so GUI doesn't freeze
-        threading.Thread(target=self.install_process, daemon=True).start()
+        self.btn_action.config(state="disabled", text="Installing...")
+        self.progress["value"] = 0
+
+        # Run in separate thread to prevent GUI freezing
+        thread = threading.Thread(target=self.install_process, daemon=True)
+        thread.start()
 
     def install_process(self):
-        total = len(self.requirements)
-        step = 100 / total
+        req_file = self.find_requirements_file()
 
-        for pkg in self.requirements:
-            self.status_label.config(text=f"Installing {pkg}...")
-            self.log(f"Pip installing: {pkg}")
+        if not req_file:
+            self.log("ERROR: requirements.txt not found!")
+            self.lbl_status.config(text="Error: Missing file", fg="red")
+            self.btn_action.config(state="normal", text="Retry")
+            return
+
+        self.log(f"Found requirements at: {req_file}")
+
+        # Read requirements
+        with open(req_file, 'r') as f:
+            packages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+        total = len(packages)
+        self.progress["maximum"] = total
+
+        python_exe = sys.executable
+
+        for i, package in enumerate(packages):
+            self.lbl_status.config(text=f"Installing {package}...")
+            self.log(f"> pip install {package}")
 
             try:
-                # The actual install command
-                subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
-                self.log(f"Successfully installed {pkg}")
-            except subprocess.CalledProcessError:
-                self.log(f"ERROR installing {pkg}")
+                # Run pip install
+                process = subprocess.Popen(
+                    [python_exe, "-m", "pip", "install", package],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True
+                )
 
-            self.progress['value'] += step
-            self.update_idletasks()
+                # Wait for completion
+                stdout, stderr = process.communicate()
 
-        self.status_label.config(text="Installation Complete!", foreground="#00ff00")
-        self.log("All tasks finished.")
-        self.btn_install.config(text="LAUNCH APP", command=self.launch_app, state=tk.NORMAL)
+                if process.returncode == 0:
+                    self.log(f"✔ Successfully installed {package}")
+                else:
+                    self.log(f"✘ Failed to install {package}")
+                    self.log(stderr)
+
+            except Exception as e:
+                self.log(f"CRITICAL ERROR: {e}")
+
+            # Update progress
+            self.progress["value"] = i + 1
+            self.root.update_idletasks()
+
+        self.lbl_status.config(text="Installation Complete!", fg="#00ff00")
+        self.log("--- SETUP FINISHED ---")
+
+        # Change button to "Launch App"
+        self.btn_action.config(
+            text="Launch App",
+            state="normal",
+            command=self.launch_app,
+            bg="#4caf50"  # Green
+        )
 
     def launch_app(self):
-        self.log("Launching main.py...")
-        self.destroy()  # Close installer
-        # Launch the main app
-        subprocess.Popen([sys.executable, "main.py"])
+        self.log("Preparing to launch application...")
 
+        # 1. Get current directory (Project Root)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        target_main = os.path.join(current_dir, "main.py")
+
+        if os.path.exists(target_main):
+            self.log(f"Launching: {target_main}")
+            self.root.destroy()
+
+            # 2. THE FIX: Use Windows 'start' command
+            # We use f-string to build the command safely.
+            # 'start' = Open new window
+            # '/k' = Keep window open after crash
+            # quotes "" around paths handles spaces in folder names
+
+            command = f'start "CoffeeMachine" cmd /k "{sys.executable}" "{target_main}"'
+
+            # shell=True is required to use the 'start' command
+            subprocess.Popen(command, shell=True, cwd=current_dir)
+        else:
+            messagebox.showerror("Error", f"Could not find main.py in:\n{current_dir}")
 
 if __name__ == "__main__":
-    app = DependencyInstaller()
-    app.mainloop()
+    root = tk.Tk()
+    app = DependencyInstaller(root)
+    root.mainloop()
